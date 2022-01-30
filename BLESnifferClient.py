@@ -1,11 +1,12 @@
 import subprocess
-import os
+import json
 
 
 class BLESnifferClient:
     def __init__(self, package_name=None, input_file=None):
+        self.input_file = None
         if input_file is not None:
-            self.input_file = open(input_file, 'r')
+            self.input_file = open(input_file, 'r', encoding='utf-8')
         elif package_name is not None:
             self.adb_process = subprocess.Popen(
                 ['adb', 'logcat', '-s', '-v', 'raw', 'BLESniffer_' + package_name],
@@ -21,17 +22,18 @@ class BLESnifferClient:
                 line = line.decode('utf-8')
             else:
                 line = self.input_file.readline()
-            parts = line.split(' ')
-            if parts.__len__() < 4:
-                continue
-            if parts[0] != 'characteristic':
-                continue
-            action = parts[1]
 
-            payload = bytearray.fromhex(''.join(parts[3:-1]))
+            if not line.startswith('event '):
+                continue
 
-            return {
-                'action': action,
-                'payload': payload,
-                'characteristic': parts[2]
-            }
+            line = line[6:]
+
+            try:
+                event_object = json.loads(line)
+
+                return {
+                    'action': event_object['event'],
+                    'data': event_object['data'],
+                }
+            except json.JSONDecodeError:
+                print("error deconding line %s" % line)
